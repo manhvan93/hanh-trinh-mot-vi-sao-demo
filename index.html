@@ -41,6 +41,8 @@
 @media (prefers-reduced-motion: reduce) {
   #countdown span, #countdown span.alternate { animation: none; }
 }
+
+#gift, #gift .gift-lid { transition: none; }
 </style></head>
 <body>
 <main id="cinema" class="opening" aria-label="Phim sinh nhật Hành trình của một vì sao">
@@ -67,7 +69,7 @@
 'use strict';
 const scenes = [
   {id:'solo',seconds:18,title:'Một vì sao mang tên em',subtitle:'Giữa hàng triệu vì sao, có một ánh sáng thật đặc biệt…',say:'Giữa muôn vàn vì sao, có một ánh sáng thật đặc biệt. Ánh sáng ấy, chính là em.'},
-  {id:'gift',seconds:14,title:'Món quà từ những vì sao',subtitle:'Sinh nhật tuổi 29 · Bản xem thử',say:'Vào ngày đặc biệt này, những vì sao mang đến em một món quà được cất giữ bằng thời gian và yêu thương.',visual:'her'},
+  {id:'gift',seconds:14,title:'Món quà từ những vì sao',subtitle:'Sinh nhật tuổi 29 · Bản xem thử',say:'Một hộp quà bay đến. Em đưa tay đón lấy món quà mà những vì sao đã cất giữ bằng thời gian và yêu thương.'},
   {id:'rewind',seconds:12,title:'Ký ức mở lối',subtitle:'',say:'Khi hộp quà mở ra, thời gian nhẹ nhàng quay ngược, trở về nơi mọi điều bắt đầu.'},
   {id:'meteor',seconds:13,title:'Một ngôi sao rời bầu trời',subtitle:'Một phép màu nhỏ đang đến với thế giới…',say:'Ngày ấy, có một ngôi sao nhỏ rời khỏi bầu trời, để đến với thế giới này như một phép màu.'},
   {id:'birth',seconds:22,title:'Một thiên thần nhỏ chào đời',subtitle:'Ngày chào đời · Trong vòng tay bố mẹ, hành trình yêu thương bắt đầu.',say:'Ngày ấy, một thiên thần nhỏ chào đời. Từ giây phút ấy, trong vòng tay bố mẹ, hành trình yêu thương của em bắt đầu.',visual:'birth'},
@@ -278,13 +280,134 @@ function orbitPoint(star, seconds, width, height) {
   return [x * .868 + y * .497, y * .868 - x * .497];
 }
 
-function portraitFrame(local) {
+const giftLid = document.querySelector('.gift-lid');
+const giftContactTime = 5.4;
+const giftOpenTime = 7.55;
+
+function drawReceivingArm(lift, back) {
+  const bias = back ? -14 : 0;
+  const shoulderX = 184 + bias;
+  const shoulderY = 198 + (back ? -5 : 0);
+  const elbowX = 183 + lift * 31 + bias;
+  const elbowY = 250 - lift * 4 + (back ? -10 : 0);
+  const wristX = 204 + lift * 48 + bias;
+  const wristY = 272 - lift * 46 + (back ? -12 : 0);
+  const gradient = formCtx.createLinearGradient(shoulderX, shoulderY, wristX + 13, wristY);
+  gradient.addColorStop(0, back ? '#664b9c' : '#8665bb');
+  gradient.addColorStop(.58, back ? '#a17bd6' : '#c89ce9');
+  gradient.addColorStop(1, '#ffe3c9');
+  const arm = new Path2D();
+  arm.moveTo(shoulderX - 8, shoulderY - 4);
+  arm.bezierCurveTo(shoulderX - 2, shoulderY + 24, elbowX - 14, elbowY - 2, elbowX - 8, elbowY + 6);
+  arm.quadraticCurveTo(elbowX - 2, elbowY + 16, wristX + 2, wristY + 4);
+  arm.lineTo(wristX - 1, wristY - 4);
+  arm.quadraticCurveTo(elbowX + 8, elbowY + 1, elbowX + 6, elbowY - 4);
+  arm.bezierCurveTo(elbowX + 5, elbowY - 13, shoulderX + 8, shoulderY + 14, shoulderX + 8, shoulderY - 2);
+  arm.quadraticCurveTo(shoulderX + 1, shoulderY - 11, shoulderX - 8, shoulderY - 4);
+
+  formCtx.globalAlpha = back ? .42 : .56;
+  formCtx.fillStyle = gradient;
+  formCtx.fill(arm);
+  formCtx.globalAlpha = back ? .28 : .49;
+  formCtx.lineWidth = .85;
+  formCtx.strokeStyle = '#ead4ff';
+  formCtx.stroke(arm);
+
+  formCtx.save();
+  formCtx.translate(wristX, wristY);
+  const hand = new Path2D('M-3 -4 Q2 -6 6 -10 L9 -12 Q11 -12 10 -9 L8 -5 Q12 -5 18 -9 Q22 -10 21 -7 L17 -3 Q21 -4 24 -7 Q27 -8 25 -4 Q21 2 15 4 Q8 7 -2 4 Z');
+  formCtx.globalAlpha = back ? .53 : .7;
+  formCtx.fillStyle = '#edbcde';
+  formCtx.fill(hand);
+  formCtx.strokeStyle = '#fff0cf';
+  formCtx.stroke(hand);
+  formCtx.restore();
+
+  formCtx.fillStyle = '#ffefd7';
+  for (let i = 0; i < 25; i++) {
+    const portion = i / 24;
+    const u = 1 - portion;
+    const x = u * u * shoulderX + 2 * u * portion * elbowX + portion * portion * wristX;
+    const y = u * u * shoulderY + 2 * u * portion * (elbowY + 24) + portion * portion * wristY;
+    const scatter = Math.sin(i * 2.37) * (5 - portion * 2);
+    formCtx.globalAlpha = (back ? .30 : .65) * (.62 + .38 * Math.sin(i * 4.17) ** 2);
+    formCtx.fillRect(x + scatter, y - scatter * .40, i % 7 === 0 ? 1.65 : 1, 1);
+  }
+  return { x: wristX + 12, y: wristY - 4 };
+}
+
+function drawGiftTrail(x, y, scale, time, flight, dx, dy) {
+  if (flight >= 1) return;
+  const angle = Math.atan2(dy, dx) + Math.PI;
+  const reach = Math.min(w, h) * .23;
+  formCtx.save();
+  formCtx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 48; i++) {
+    const phase = (i / 48 + time * .25) % 1;
+    const spread = Math.sin(i * 4.27) * (8 + phase * reach * .29);
+    const distance = (phase + .13) * reach;
+    formCtx.globalAlpha = (1 - phase) * Math.sin(Math.PI * Math.min(.97, flight)) * .79;
+    formCtx.fillStyle = starColors[(i + 2) % starColors.length];
+    const size = (.7 + (i % 6) * .38) * Math.max(.75, scale * 1.5);
+    formCtx.fillRect(x + Math.cos(angle) * distance - Math.sin(angle) * spread,
+      y + Math.sin(angle) * distance + Math.cos(angle) * spread, size, size);
+  }
+  formCtx.restore();
+}
+
+function receiveGift(time, pose, artX, artY, artScale) {
+  const quiet = reducedMotion.matches;
+  formCtx.save();
+  formCtx.translate(artX, artY);
+  formCtx.scale(artScale, artScale);
+  drawReceivingArm(pose, true);
+  const palm = drawReceivingArm(pose, false);
+  formCtx.restore();
+
+  const speed = clamp((time - .42) / (giftContactTime - .42), 0, 1);
+  const flight = quiet ? 1 : speed * speed * (3 - 2 * speed);
+  const scale = Math.min(.64, w / 800, h / 900) * (.46 + .54 * flight);
+  const toX = artX + palm.x * artScale;
+  const toY = artY + palm.y * artScale - 73 * scale;
+  const fromX = Math.max(w * .86, toX + w * .18);
+  const fromY = h * .13;
+  const arc = quiet ? 0 : Math.sin(Math.PI * flight) * h * .13;
+  const x = fromX + (toX - fromX) * flight;
+  const y = fromY + (toY - fromY) * flight - arc;
+  const rotation = quiet ? 0 : (1 - flight) * (17 + Math.sin(time * 1.6) * 14);
+  const lid = smooth(clamp((time - giftOpenTime) / 1.28, 0, 1));
+  gift.style.opacity = String((quiet ? 1 : smooth(clamp((time - .18) / .9, 0, 1))) * smooth(clamp((scenes[activeIdx].seconds - time) / .75, 0, 1)));
+  gift.style.left = x + 'px';
+  gift.style.top = y + 'px';
+  gift.style.transform = 'translate(-50%, -50%) rotate(' + rotation + 'deg) scale(' + scale + ')';
+  giftLid.style.transform = 'rotate(' + (-28 * lid) + 'deg) translate(' + (-26 * lid) + 'px,' + (-45 * lid) + 'px)';
+  if (!quiet) drawGiftTrail(x, y, scale, time, speed, toX - fromX, toY - fromY);
+
+  const caught = Math.max(0, 1 - Math.abs(time - giftContactTime - .12) / .48);
+  const opened = Math.max(0, 1 - Math.abs(time - giftOpenTime - .83) / 1.38);
+  const glow = Math.max(caught * .55, opened * .8);
+  if (glow > 0 && !quiet) {
+    const radius = Math.max(35, 170 * scale);
+    const halo = formCtx.createRadialGradient(x, y - 20 * scale, 0, x, y - 20 * scale, radius);
+    halo.addColorStop(0, 'rgba(255,226,162,' + glow + ')');
+    halo.addColorStop(.34, 'rgba(246,181,206,' + glow * .45 + ')');
+    halo.addColorStop(1, 'rgba(218,146,255,0)');
+    formCtx.fillStyle = halo;
+    formCtx.fillRect(x - radius, y - radius * 1.3, radius * 2, radius * 2.6);
+  }
+}
+
+function portraitFrame(local, giftTime) {
   formCtx.clearRect(0, 0, w, h);
   const cx = w * .53;
   const cy = h * .32;
   const artHeight = Math.min(h * .54, w * 1.09, 530);
   const artWidth = artHeight * 300 / 390;
-  const artX = (w - artWidth) / 2;
+  const receiving = giftTime !== undefined;
+  const poseProgress = receiving ? smooth(clamp((giftTime - .15) / 4.2, 0, 1)) : 0;
+  const catchProgress = receiving ? clamp((giftTime - giftContactTime) / .57, 0, 1) : 0;
+  const recoil = receiving && !reducedMotion.matches ? Math.sin(catchProgress * Math.PI) * .13 : 0;
+  const artX = (w - artWidth) / 2 - Math.min(124, w * .12) * poseProgress;
   const artY = Math.max(35, h * .37 - artHeight * .53);
   const quiet = reducedMotion.matches;
   const burst = quiet ? 0 : 1 - (1 - clamp((local - orbitEnd) / (burstEnd - orbitEnd), 0, 1)) ** 3;
@@ -345,6 +468,7 @@ function portraitFrame(local) {
     formCtx.fillRect(x - size / 2, y - size / 2, size, size);
   }
   formCtx.restore();
+  if (receiving) receiveGift(giftTime, poseProgress - recoil, artX, artY, artHeight / 390);
 }
 
 makePortrait();
@@ -358,8 +482,7 @@ function drawBg(now,sceneId){starsCtx.clearRect(0,0,w,h);drawGalaxy(now);const t
 function drawFormation(scene,local){formCtx.clearRect(0,0,w,h);if(!scene.formation||!formationDots.length)return;const p=smooth(clamp(local/(scene.seconds*.65),0,1));const rect=memory.getBoundingClientRect();const src=storedImg[scene.visual];if(!src)return;const naturalAspect=src.naturalWidth/src.naturalHeight;const boxAspect=rect.width/rect.height;let renderW,renderH; if(naturalAspect>boxAspect){renderW=rect.width;renderH=renderW/naturalAspect}else{renderH=rect.height;renderW=renderH*naturalAspect}const left=rect.left+(rect.width-renderW)/2,top=rect.top+(rect.height-renderH)/2;formCtx.globalCompositeOperation='lighter';for(const a of formationDots){const step=smooth(clamp((p-a.delay)/(.83-a.delay),0,1));const destX=left+a.u*renderW,destY=top+a.v*renderH;const x=a.x+(destX-a.x)*step,y=a.y+(destY-a.y)*step;if(x<0||x>w||y<0||y>h)continue;const alpha=.3+.67*step;formCtx.fillStyle=a.col+alpha.toFixed(2)+')';formCtx.beginPath();formCtx.arc(x,y,a.rad*(.7+step*.28),0,7);formCtx.fill()}formCtx.globalCompositeOperation='source-over';}
 function setScene(idx){if(idx===activeIdx)return;activeIdx=idx;const s=scenes[idx];textTitle.textContent=s.title;textSub.textContent=s.subtitle;textSub.hidden=!s.subtitle;gift.style.opacity='0';gift.classList.remove('open');portal.style.opacity='0';meteor.style.opacity='0';symbol.style.opacity='0';cake.style.opacity='0';memory.style.opacity='0';memory.className='memory';lastWish.classList.remove('visible');lastWish.textContent='';if(s.visual){memoryImg.src=imgSources[s.visual];if(s.visual==='birth')memory.classList.add('birth');else if(s.visual==='family')memory.classList.add('family');else if(s.visual.startsWith('age'))memory.classList.add('age')}if(s.formation)buildParticles(s.visual);else{formationDots=[];activeParticleImage=null}if(soundOn)startSpeak(s.say)}
 function renderScene(local,dt){const s=scenes[activeIdx],p=clamp(local/s.seconds,0,1);let opacity=0;if(s.visual){opacity=s.formation?smooth((p-.38)/.54)*.96:smooth((p-.05)/.2)*.96;opacity*=smooth((1-p)/.11);if(s.id==='wishes')opacity=.75;if(s.id==='family')opacity=.93;}memory.style.opacity=opacity.toFixed(3);let offsetX=0,offsetY=0,scale=1+Math.sin(t*.38)*.008;if(s.id==='age3'||s.id==='age6'){offsetX=Math.sin(t*1.3)*6;offsetY=Math.sin(t*.9)*5;}if(s.id==='family'||s.id==='wishes'){scale=1.02+Math.sin(t*.3)*.008}memory.style.transform=`translate(calc(-50% + ${offsetX}px),calc(-50% + ${offsetY}px)) scale(${scale})`;
-  if(s.id==='gift'){gift.style.opacity=smooth(p/.25).toString();gift.style.top=(18+p*26)+'%';gift.style.transform=`translate(-50%,-50%) scale(${.4+.5*smooth(p/.4)})`;if(p>.57)gift.classList.add('open');memory.style.opacity=(.75*(1-smooth((p-.55)/.3))).toString();flash.style.opacity=p>.65?(Math.sin((p-.65)/.35*Math.PI)*.17).toFixed(2):'0';}
-  else if(s.id==='rewind'){portal.style.opacity=smooth(p/.22).toString();flash.style.opacity=p>.88?((p-.88)/.12*.6).toString():'0'}
+  if(s.id==='rewind'){portal.style.opacity=smooth(p/.22).toString();flash.style.opacity=p>.88?((p-.88)/.12*.6).toString():'0'}
   else if(s.id==='meteor'){symbol.style.opacity=p<.85?String(.32+.25*Math.sin(p*5)):'0';flash.style.opacity=p>.87?((p-.87)/.13*.5).toString():'0'}
   else {flash.style.opacity='0'}
   if(s.id==='family'){cake.style.opacity=smooth((p-.38)/.25).toString();cake.style.transform=`translate(-50%,-50%) scale(${.7+.1*smooth((p-.38)/.3)})`}
@@ -377,6 +500,7 @@ function renderScene(local,dt){const s=scenes[activeIdx],p=clamp(local/s.seconds
     textSub.style.opacity = titleOpacity;
   }
   if (s.id === 'solo') portraitFrame(local);
+  else if (s.id === 'gift') portraitFrame(scenes[0].seconds + local, local);
   else drawFormation(s, local);
 }
 function sceneForTime(val){for(let i=scenes.length-1;i>=0;i--)if(val>=offsets[i])return i;return 0}
