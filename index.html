@@ -264,6 +264,7 @@ function makePortrait() {
         size: .5 + random() ** 2 * 1.9,
         flare: .78 + random() * .43,
         lag: random() * .28,
+        beacon: portraitStars.length % 31 === 0,
       });
     }
   }
@@ -320,8 +321,26 @@ function portraitFrame(local) {
     const x = startX + (targetX - startX) * step;
     const y = startY + (targetY - startY) * step;
     const shimmer = quiet ? .8 : .70 + .30 * Math.sin(local * 3.6 + star.angle * 9);
-    const size = star.size * (.69 + flare * .72 + step * .13);
-    formCtx.globalAlpha = (.29 + step * .47 + flare * .16) * shimmer;
+    const beacon = star.beacon && !quiet;
+    const size = star.size * (.82 + flare * .72 + step * .08) + (beacon ? (1 - step) * 1.65 : 0);
+    if (beacon && step < .95) {
+      formCtx.strokeStyle = starColors[star.color];
+      formCtx.lineWidth = 1.35;
+      formCtx.globalAlpha = (.45 + flare * .30) * (1 - step);
+      formCtx.beginPath();
+      formCtx.moveTo(x, y);
+      if (local < orbitEnd) {
+        for (const delay of [.04, .08, .12, .17]) {
+          const [tx, ty] = orbitPoint(star, local - delay, w, h);
+          formCtx.lineTo(cx + tx, cy + ty);
+        }
+      } else {
+        const tail = (12 + flare * 47) * (1 - step);
+        formCtx.lineTo(x - Math.cos(angle) * tail, y - Math.sin(angle) * tail * .76);
+      }
+      formCtx.stroke();
+    }
+    formCtx.globalAlpha = Math.min(1, (.36 + step * .40 + flare * .16) * shimmer + (beacon ? .28 * (1 - step) : 0));
     formCtx.fillStyle = starColors[star.color];
     formCtx.fillRect(x - size / 2, y - size / 2, size, size);
   }
