@@ -43,6 +43,18 @@
 }
 
 #gift, #gift .gift-lid { transition: none; }
+#birthday-cake .candles i::before {
+  opacity: var(--flame-level, 1);
+  transform-origin: 50% 92%;
+  animation: none;
+  transform: rotate(var(--flame-angle, 0deg)) scaleY(calc(.32 + var(--flame-level, 1) * .68));
+}
+#birthday-cake .candle-wisp {
+  position: absolute; top: 11px; width: 10px; height: 32px; opacity: 0;
+  border-radius: 55% 45% 38% 60%; pointer-events: none;
+  background: radial-gradient(ellipse, #d9d7ff95, #c4baff35 44%, transparent 72%);
+  filter: blur(1.6px);
+}
 </style></head>
 <body>
 <main id="cinema" class="opening" aria-label="Phim sinh nhật Hành trình của một vì sao">
@@ -473,19 +485,161 @@ function portraitFrame(local, giftTime) {
 
 makePortrait();
 
-function resize(){w=cinema.clientWidth;h=cinema.clientHeight;dpr=Math.min(window.devicePixelRatio||1,1.5);for(const can of [starCanvas,formCanvas]){can.width=Math.round(w*dpr);can.height=Math.round(h*dpr);can.style.width=w+'px';can.style.height=h+'px';can.getContext('2d').setTransform(dpr,0,0,dpr,0,0)}const n=w<700?250:480;starfield=Array.from({length:n},()=>({x:Math.random()*w,y:Math.random()*h,r:.3+Math.random()*1.4,f:Math.random()*6.28,s:.03+Math.random()*.1,c:Math.random()>.65?'#fff1c9':'#cdbfff'}));createGalaxy();if(activeParticleImage)buildParticles(activeParticleImage)}
+const galaxyColors = ['#55d9ff', '#8299ff', '#bd83ff', '#ff7fcd', '#ffbd77', '#fff0bd'];
+const galaxyStreams = [];
+const galaxyLow = new URLSearchParams(location.search).get('quality') === 'low'
+  || (navigator.deviceMemory && navigator.deviceMemory <= 4);
+const galaxyBurstAt = 3.15;
+const galaxyOrbitAt = 0;
+function seedExtraStars() {
+  galaxyStreams.length = 0;
+  const count = galaxyLow ? 580 : w < 620 ? 1050 : 2360;
+  let seed = 291207;
+  const next = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < count; i++) {
+    const distance = Math.sqrt(next());
+    galaxyStreams.push({
+      distance, arm: i % 6, phase: next() * (Math.PI * 2),
+      offset: (next() - .5) * .72,
+      thickness: (next() - .5) * .18,
+      size: .48 + next() ** 2 * 2.15,
+      reach: .6 + next() * .65,
+      bright: .38 + next() * .60,
+    });
+  }
+}
+
+function galaxyBloom(x, y, radius, color, opacity) {
+  const gradient = starsCtx.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, 'rgba(' + color + ',' + opacity + ')');
+  gradient.addColorStop(.44, 'rgba(' + color + ',' + opacity * .37 + ')');
+  gradient.addColorStop(1, 'rgba(' + color + ',0)');
+  starsCtx.fillStyle = gradient;
+  starsCtx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+}
+
+function paintGalaxySweep(now, sceneId) {
+  const openingScene = sceneId === 'solo';
+  const beforeFilm = sceneId === '';
+  if (!openingScene && !beforeFilm) return;
+  const local = openingScene ? t - offsets[0] : 0;
+  const quiet = reducedMotion.matches;
+  const time = quiet ? 0 : openingScene ? local : now * .00016;
+  const cx = w * .51;
+  const cy = h * .35;
+  const span = Math.hypot(w, h);
+  const orbitWeight = openingScene ? smooth(clamp((local - galaxyOrbitAt + .45) / .75, 0, 1)) : .52;
+  const elapsed = local - galaxyBurstAt;
+  const expansion = quiet ? 0 : 1 - (1 - clamp(elapsed / 1.35, 0, 1)) ** 2.8;
+  const away = quiet ? 0 : smooth(clamp((elapsed - 1.28) / 2.35, 0, 1));
+  const surge = quiet ? 0 : smooth(clamp((elapsed + .10) / .28, 0, 1))
+    * (1 - smooth(clamp((elapsed - .35) / .86, 0, 1)));
+
+  starsCtx.save();
+  starsCtx.globalCompositeOperation = 'screen';
+  galaxyBloom(w * .27, h * .51, span * .27, '0,157,245', .21 + surge * .19);
+  galaxyBloom(w * .60, h * .31, span * .25, '200,63,246', .25 + surge * .22);
+  galaxyBloom(w * .79, h * .18, span * .21, '254,99,155', .16 + surge * .29);
+  galaxyBloom(cx, cy, span * (.13 + .16 * expansion), '255,180,91', .07 + surge * .56);
+
+  const rotation = time * .83;
+  for (const star of galaxyStreams) {
+    const spiral = star.arm * Math.PI / 3 + star.distance * 4.3 + star.offset + rotation;
+    const radius = span * (.019 + star.distance * .42);
+    const px = Math.cos(spiral) * radius;
+    const py = Math.sin(spiral) * radius * .41 + star.thickness * h;
+    const screenX = .88 * px + .475 * py;
+    const screenY = .88 * py - .475 * px;
+    const direction = Math.atan2(screenY, screenX) + star.offset * .9;
+    const distance = span * expansion * star.reach * .63;
+    const tail = surge * (6 + star.size * 13);
+    const ambientRadius = span * star.distance * .55;
+    const ambientX = Math.cos(star.phase) * ambientRadius;
+    const ambientY = Math.sin(star.phase) * ambientRadius * .74;
+    const x = cx + ambientX + (screenX - ambientX) * orbitWeight + Math.cos(direction) * distance;
+    const y = cy + ambientY + (screenY - ambientY) * orbitWeight + Math.sin(direction) * distance;
+    if (x < -30 || x > w + 30 || y < -30 || y > h + 30) continue;
+    const pulse = quiet ? .79 : .69 + Math.sin(time * 4.6 + star.phase * 8) * .30;
+    starsCtx.globalAlpha = (1 - away * .88) * star.bright * pulse * (.45 + orbitWeight * .33 + surge * .22);
+    starsCtx.fillStyle = galaxyColors[star.arm];
+    const size = star.size * (1 + surge * .9);
+    starsCtx.fillRect(x - size * .5, y - size * .5, size, size);
+    if (star.size > 2 && !quiet) {
+      starsCtx.globalAlpha *= .65;
+      starsCtx.strokeStyle = galaxyColors[star.arm];
+      starsCtx.lineWidth = Math.max(.7, size * .40);
+      starsCtx.beginPath();
+      starsCtx.moveTo(x, y);
+      const tangent = expansion > 0 ? direction : Math.atan2(Math.cos(spiral) * .41 - Math.sin(spiral) * .54, -Math.sin(spiral) + Math.cos(spiral) * .22);
+      const trail = tail + (beforeFilm ? 4 : 8) * orbitWeight;
+      starsCtx.lineTo(x - Math.cos(tangent) * trail, y - Math.sin(tangent) * trail);
+      starsCtx.stroke();
+    }
+  }
+  if (surge > .03) {
+    for (let ring = 0; ring < 3; ring++) {
+      const wave = clamp((elapsed - ring * .09) / .96, 0, 1);
+      if (wave <= 0 || wave >= 1) continue;
+      starsCtx.globalAlpha = (1 - wave) ** 2 * .49;
+      starsCtx.strokeStyle = galaxyColors[ring + 2];
+      starsCtx.lineWidth = 1.2 + (1 - wave) * 2;
+      starsCtx.beginPath();
+      starsCtx.ellipse(cx, cy, span * wave * .64, span * wave * .33, -.40, 0, Math.PI * 2);
+      starsCtx.stroke();
+    }
+  }
+  starsCtx.restore();
+}
+
+function resize(){w=cinema.clientWidth;h=cinema.clientHeight;dpr=Math.min(window.devicePixelRatio||1,1.5);for(const can of [starCanvas,formCanvas]){can.width=Math.round(w*dpr);can.height=Math.round(h*dpr);can.style.width=w+'px';can.style.height=h+'px';can.getContext('2d').setTransform(dpr,0,0,dpr,0,0)}const n=w<700?250:480;starfield=Array.from({length:n},()=>({x:Math.random()*w,y:Math.random()*h,r:.3+Math.random()*1.4,f:Math.random()*6.28,s:.03+Math.random()*.1,c:Math.random()>.65?'#fff1c9':'#cdbfff'}));createGalaxy();seedExtraStars();if(activeParticleImage)buildParticles(activeParticleImage)}
 window.addEventListener('resize',resize);resize();
 function buildParticles(key){formationDots=[];activeParticleImage=key;const img=storedImg[key];if(!img||!img.complete||!img.naturalWidth){if(img)img.addEventListener('load',()=>{if(activeParticleImage===key)buildParticles(key)},{once:true});return}const can=document.createElement('canvas');can.width=190;can.height=Math.max(100,Math.round(can.width*img.naturalHeight/img.naturalWidth));const cx=can.getContext('2d',{willReadFrequently:true});cx.drawImage(img,0,0,can.width,can.height);const data=cx.getImageData(0,0,can.width,can.height).data;const limit=w<700?1750:3200;let passes=0;while(formationDots.length<limit&&passes<limit*45){passes++;const x=Math.floor(Math.random()*can.width),y=Math.floor(Math.random()*can.height),p=(y*can.width+x)*4;const a=data[p+3];if(a<95)continue;const brightness=(data[p]+data[p+1]+data[p+2])/3;if(key==='family'&&brightness<48)continue;if(Math.random()<.25)continue;const rad=Math.random()*Math.PI*2,dist=Math.max(w,h)*(.7+Math.random()*.7);formationDots.push({u:x/can.width,v:y/can.height,x:w/2+Math.cos(rad)*dist,y:h/2+Math.sin(rad)*dist,delay:Math.random()*.45,twinkle:Math.random()*6.28,rad:.5+Math.random()*1.05,col:`rgba(${data[p]},${data[p+1]},${data[p+2]},`})}}
-function drawBg(now,sceneId){starsCtx.clearRect(0,0,w,h);drawGalaxy(now);const tm=now*.00018;for(const a of starfield){const alpha=.32+.57*(.5+.5*Math.sin(now*.0019+a.f));starsCtx.globalAlpha=alpha;starsCtx.fillStyle=a.c;starsCtx.beginPath();starsCtx.arc(a.x+Math.sin(tm+a.f)*4, (a.y+tm*a.s*95)%h, a.r,0,7);starsCtx.fill()}starsCtx.globalAlpha=1;const tx=w*.46+Math.sin(now*.0004)*w*.04,ty=h*.35;const halo=starsCtx.createRadialGradient(tx,ty,0,tx,ty,Math.max(w,h)*.52);halo.addColorStop(0,'rgba(121,76,214,.12)');halo.addColorStop(.4,'rgba(74,52,153,.09)');halo.addColorStop(1,'rgba(17,15,70,0)');starsCtx.fillStyle=halo;starsCtx.fillRect(0,0,w,h);
+function drawBg(now,sceneId){starsCtx.clearRect(0,0,w,h);drawGalaxy(now);paintGalaxySweep(now, sceneId);const tm=now*.00018;for(const a of starfield){const alpha=.32+.57*(.5+.5*Math.sin(now*.0019+a.f));starsCtx.globalAlpha=alpha;starsCtx.fillStyle=a.c;starsCtx.beginPath();starsCtx.arc(a.x+Math.sin(tm+a.f)*4, (a.y+tm*a.s*95)%h, a.r,0,7);starsCtx.fill()}starsCtx.globalAlpha=1;const tx=w*.46+Math.sin(now*.0004)*w*.04,ty=h*.35;const halo=starsCtx.createRadialGradient(tx,ty,0,tx,ty,Math.max(w,h)*.52);halo.addColorStop(0,'rgba(121,76,214,.12)');halo.addColorStop(.4,'rgba(74,52,153,.09)');halo.addColorStop(1,'rgba(17,15,70,0)');starsCtx.fillStyle=halo;starsCtx.fillRect(0,0,w,h);
   if(sceneId==='meteor'){const x=w*(.92-.68*clamp((t-offsets[3])/scenes[3].seconds,0,1)),y=h*(-.2+.84*clamp((t-offsets[3])/scenes[3].seconds,0,1));const grad=starsCtx.createLinearGradient(x,y,x+w*.24,y-h*.25);grad.addColorStop(0,'#fff9cc');grad.addColorStop(.3,'#ffc99394');grad.addColorStop(1,'#9077ff00');starsCtx.strokeStyle=grad;starsCtx.lineWidth=8;starsCtx.beginPath();starsCtx.moveTo(x,y);starsCtx.lineTo(x+w*.24,y-h*.25);starsCtx.stroke();starsCtx.fillStyle='#fffce9';starsCtx.shadowColor='#ffc889';starsCtx.shadowBlur=45;starsCtx.beginPath();starsCtx.arc(x,y,9,0,7);starsCtx.fill();starsCtx.shadowBlur=0;}
 }
 function drawFormation(scene,local){formCtx.clearRect(0,0,w,h);if(!scene.formation||!formationDots.length)return;const p=smooth(clamp(local/(scene.seconds*.65),0,1));const rect=memory.getBoundingClientRect();const src=storedImg[scene.visual];if(!src)return;const naturalAspect=src.naturalWidth/src.naturalHeight;const boxAspect=rect.width/rect.height;let renderW,renderH; if(naturalAspect>boxAspect){renderW=rect.width;renderH=renderW/naturalAspect}else{renderH=rect.height;renderW=renderH*naturalAspect}const left=rect.left+(rect.width-renderW)/2,top=rect.top+(rect.height-renderH)/2;formCtx.globalCompositeOperation='lighter';for(const a of formationDots){const step=smooth(clamp((p-a.delay)/(.83-a.delay),0,1));const destX=left+a.u*renderW,destY=top+a.v*renderH;const x=a.x+(destX-a.x)*step,y=a.y+(destY-a.y)*step;if(x<0||x>w||y<0||y>h)continue;const alpha=.3+.67*step;formCtx.fillStyle=a.col+alpha.toFixed(2)+')';formCtx.beginPath();formCtx.arc(x,y,a.rad*(.7+step*.28),0,7);formCtx.fill()}formCtx.globalCompositeOperation='source-over';}
 function setScene(idx){if(idx===activeIdx)return;activeIdx=idx;const s=scenes[idx];textTitle.textContent=s.title;textSub.textContent=s.subtitle;textSub.hidden=!s.subtitle;gift.style.opacity='0';gift.classList.remove('open');portal.style.opacity='0';meteor.style.opacity='0';symbol.style.opacity='0';cake.style.opacity='0';memory.style.opacity='0';memory.className='memory';lastWish.classList.remove('visible');lastWish.textContent='';if(s.visual){memoryImg.src=imgSources[s.visual];if(s.visual==='birth')memory.classList.add('birth');else if(s.visual==='family')memory.classList.add('family');else if(s.visual.startsWith('age'))memory.classList.add('age')}if(s.formation)buildParticles(s.visual);else{formationDots=[];activeParticleImage=null}if(soundOn)startSpeak(s.say)}
+const finalCandleTime = 54.1;
+const candleSmoke = Array.from({ length: 5 }, (_, i) => {
+  const wisp = document.createElement('b');
+  wisp.className = 'candle-wisp';
+  wisp.style.left = (26 + i * 14) + '%';
+  cake.appendChild(wisp);
+  return wisp;
+});
+
+function birthdayTable(scene, local) {
+  if (scene.id !== 'family' && scene.id !== 'wishes') return;
+  const last = scene.id === 'wishes';
+  const reveal = last ? 1 : smooth(clamp((local - 3) / 3.5, 0, 1));
+  const blow = last ? local - finalCandleTime : -Infinity;
+  const quiet = reducedMotion.matches;
+  const stagger = [.03, .09, .15, .23, .29];
+  cake.style.opacity = String(reveal * (last ? 1 - .44 * smooth(clamp((blow - 2) / 1.7, 0, 1)) : 1));
+  cake.style.top = (last ? 59 : 61) + '%';
+  const size = w < 620 ? .72 : .93;
+  cake.style.transform = 'translate(-50%,-50%) scale(' + size + ')';
+  for (const [i, candle] of Array.from(cake.querySelectorAll('.candles i')).entries()) {
+    const after = blow - stagger[i];
+    const flame = 1 - smooth(clamp(after / .21, 0, 1));
+    const bend = quiet ? 0 : Math.max(0, 1 - Math.abs(after + .06) / .45) * 48;
+    candle.style.setProperty('--flame-level', flame);
+    candle.style.setProperty('--flame-angle', bend + 'deg');
+    const smokeTime = clamp((after - .06) / 2, 0, 1);
+    const smoke = candleSmoke[i];
+    smoke.style.opacity = quiet ? '0' : String(Math.sin(Math.PI * smokeTime) * .58);
+    smoke.style.transform = 'translate(' + Math.sin(smokeTime * 4 + i) * 13 + 'px,' + (-smokeTime * 65) + 'px) rotate(' + (8 + smokeTime * 23) + 'deg) scale(' + (.45 + smokeTime * .75) + ')';
+  }
+}
+
 function renderScene(local,dt){const s=scenes[activeIdx],p=clamp(local/s.seconds,0,1);let opacity=0;if(s.visual){opacity=s.formation?smooth((p-.38)/.54)*.96:smooth((p-.05)/.2)*.96;opacity*=smooth((1-p)/.11);if(s.id==='wishes')opacity=.75;if(s.id==='family')opacity=.93;}memory.style.opacity=opacity.toFixed(3);let offsetX=0,offsetY=0,scale=1+Math.sin(t*.38)*.008;if(s.id==='age3'||s.id==='age6'){offsetX=Math.sin(t*1.3)*6;offsetY=Math.sin(t*.9)*5;}if(s.id==='family'||s.id==='wishes'){scale=1.02+Math.sin(t*.3)*.008}memory.style.transform=`translate(calc(-50% + ${offsetX}px),calc(-50% + ${offsetY}px)) scale(${scale})`;
   if(s.id==='rewind'){portal.style.opacity=smooth(p/.22).toString();flash.style.opacity=p>.88?((p-.88)/.12*.6).toString():'0'}
   else if(s.id==='meteor'){symbol.style.opacity=p<.85?String(.32+.25*Math.sin(p*5)):'0';flash.style.opacity=p>.87?((p-.87)/.13*.5).toString():'0'}
   else {flash.style.opacity='0'}
-  if(s.id==='family'){cake.style.opacity=smooth((p-.38)/.25).toString();cake.style.transform=`translate(-50%,-50%) scale(${.7+.1*smooth((p-.38)/.3)})`}
+  birthdayTable(s, local);
   if(s.id==='wishes'){const chunks=[
     'Mong tuổi mới mang đến bình yên, niềm vui giản dị và những hạnh phúc thật lòng.',
     'Mong những cố gắng âm thầm được đền đáp, những ước mơ trở thành hiện thực.',
