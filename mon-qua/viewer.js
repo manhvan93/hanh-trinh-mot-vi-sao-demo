@@ -51,6 +51,7 @@ async function openGift() {
   const frame = document.createElement('iframe');
   frame.title = 'Hành trình của một vì sao';
   frame.setAttribute('sandbox', 'allow-scripts');
+  frame.setAttribute('allow', 'autoplay *');
   frame.setAttribute('allowfullscreen', '');
   frame.referrerPolicy = 'no-referrer';
   frame.srcdoc = documentText.replace(head, opener =>
